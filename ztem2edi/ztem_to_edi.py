@@ -5,7 +5,7 @@
 # Flat error floor to be applied in the EDI file.
 flat_error = 0.03
 components = ['XIP', 'YIP', 'XQD', 'YQD']
-
+dist_tol = 0.02
 
 from collections import OrderedDict
 import numpy as np
@@ -133,32 +133,65 @@ def to_edi(site, out_file, freqs, info=None, header=None, mtsect=None, defs=None
         f.write('>END')
 
 
-def from_gdb(gdb_path, out_path, downsample_rate):
+def from_gdb(gdb_path, out_path, downsample_rate, skip_lines=True):
     convert = {'XIP': 'TZXR', 'YIP': 'TZYR', 'XQD': 'TZXI', 'YQD': 'TZYI'}
     data = {'TZXR': [], 'TZYR': [], 'TZXI': [], 'TZYI': [], 'Longitude': [], 'Latitude': []}
 
     # Open the context like this so you're sure it closes properly afterwards
+    if downsample_rate.lower().endswith('m'):
+        downsample_distance = float(downsample_rate[:-1])
+    else:
+        downsample_distance = 0
+        skip_rate = int(downsample_rate)
+
     with gxpy.gx.GXpy() as gxp:
         gdb = gxpy.gdb.Geosoft_gdb.open(gdb_path)
-        lines = list(gdb.list_lines().keys())
+        lines = list(gdb.list_lines(select=False).keys())
 
         channels = gdb.list_channels()
-        freqs = sorted(set([int(x[4:7]) for x in gdb.list_channels() if (x[:3].upper() in components and x.endswith('Hz'))]))
+        freqs = sorted(set([int(x[4:7]) for x in gdb.list_channels() if (x[:3].upper() in components and x.lower().endswith('hz'))]))
         print('Frequency set is: {}'.format(freqs))
+        line_skipped = False
         for il, line in enumerate(lines):
-            # Do these one at a time just in case they get returned out of order                    
-            data['Latitude'] = gdb.read_line(line, channels='Latitude')[0][::downsample_rate]
-            data['Longitude'] = gdb.read_line(line, channels='Longitude')[0][::downsample_rate]
+            # Do these one at a time just in case they get returned out of order
+            if il > 0 and not line_skipped:
+                x1, y1 = X[0], Y[0]
+            if downsample_distance:
+                # Assume the sample distance is constant
+                X = gdb.read_line(line, channels='X')[0]
+                Y = gdb.read_line(line, channels='Y')[0]
+                if skip_lines and il > 0:
+                    line_dist = np.min((np.sqrt((x1 - X[0])**2 + (y1 - Y[0])**2),
+                                        np.sqrt((x1 - X[-1])**2 + (y1 - Y[-1])**2)))
+                    # print(line_dist)
+                    # print('Current line separation is: {:>6.2f}'.format(line_dist))
+                    if line_dist < downsample_distance - downsample_distance*dist_tol:
+                        line_skipped = True
+                        continue
+                    else:
+                        line_skipped = False
+                dist = np.sqrt((X[1:] - X[0])**2 + (Y[1:] - Y[0])**2)
+                diff = np.diff(dist % downsample_distance, axis=0)
+                idx = np.where(diff < 0)[0]
+            else:
+                idx = np.arange(0, len(X), skip_rate, dtype=int)
+
+            try:
+                data['Latitude'] = gdb.read_line(line, channels='Latitude')[0][idx]
+                data['Longitude'] = gdb.read_line(line, channels='Longitude')[0][idx]
+            except gxpy.gdb.GdbException:
+                data['Latitude'] = gdb.read_line(line, channels='Lat')[0][idx]
+                data['Longitude'] = gdb.read_line(line, channels='Long')[0][idx]
             for key in data.keys():
                 if key not in ('Latitude', 'Longitude'):
                     data.update({key: np.zeros((len(data['Latitude']), len(freqs)))})
             for ii, freq in enumerate(freqs):
                 # For some reason it seems to require flipping the real parts
                 # print('XIP_{:03d}Hz'.format(freq))
-                data['TZYR'][:, ii] = -1 * np.squeeze(gdb.read_line(line, channels='XIP_{:03d}Hz'.format(freq))[0][::downsample_rate])
-                data['TZXR'][:, ii] = -1 *  np.squeeze(gdb.read_line(line, channels='YIP_{:03d}Hz'.format(freq))[0][::downsample_rate])
-                data['TZYI'][:, ii] = np.squeeze(gdb.read_line(line, channels='XQD_{:03d}Hz'.format(freq))[0][::downsample_rate])
-                data['TZXI'][:, ii] = np.squeeze(gdb.read_line(line, channels='YQD_{:03d}Hz'.format(freq))[0][::downsample_rate])
+                data['TZYR'][:, ii] = -1 * np.squeeze(gdb.read_line(line, channels='XIP_{:03d}Hz'.format(freq))[0][idx])
+                data['TZXR'][:, ii] = -1 *  np.squeeze(gdb.read_line(line, channels='YIP_{:03d}Hz'.format(freq))[0][idx])
+                data['TZYI'][:, ii] = np.squeeze(gdb.read_line(line, channels='XQD_{:03d}Hz'.format(freq))[0][idx])
+                data['TZXI'][:, ii] = np.squeeze(gdb.read_line(line, channels='YQD_{:03d}Hz'.format(freq))[0][idx])
             
             for ii in range(len(data['TZXR'][:,0])):
                 site_name = '{}_{:03d}'.format(line, ii)
@@ -171,6 +204,8 @@ def from_gdb(gdb_path, out_path, downsample_rate):
                         'Latitude' : data['Latitude'][ii][0],
                         'Longitude' : data['Longitude'][ii][0]}
                 out_file = os.path.join(out_path, site_name + '.edi')
+                if not os.path.exists(out_path):
+                    os.mkdir(out_path)
                 to_edi(site, out_file, freqs=freqs, info=None, header=None, mtsect=None, defs=None)
 
 
@@ -233,14 +268,14 @@ def from_grd(data_path, out_path, downsample_rate):
 def main():
     try:
         try:
-            downsample_rate = int(sys.argv[3])
+            downsample_rate = sys.argv[3]
         except IndexError:
-            downsample_rate = int(10)
+            downsample_rate = 10
         if sys.argv[1].endswith('.gdb'):
-            from_gdb(gdb_path=sys.argv[1], out_path=sys.argv[2], downsample_rate=downsample_rate)
+            from_gdb(gdb_path=sys.argv[1], out_path=sys.argv[2], downsample_rate=str(downsample_rate))
             return
         elif sys.argv[1].endswith('.grd'):
-            from_grd(gdb_path=sys.argv[1], out_path=sys.argv[2], downsample_rate=downsample_rate)
+            from_grd(gdb_path=sys.argv[1], out_path=sys.argv[2], downsample_rate=str(downsample_rate))
             return
     except IndexError:
         pass
