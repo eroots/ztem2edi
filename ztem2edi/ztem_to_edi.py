@@ -281,6 +281,7 @@ def main():
         pass
     print('Usage is:\n')
     print('\t ztem2edi <.grd or .gdb path> <output_path> <downsample_rate | Default=10>\n')
+    print('Specify downsample rate as, e.g., 1000m to search for points at a 1000 meter separation')
     print('Frequency search within .grd files assynes files named as <tag>_<component>_<freq>Hz.grd\n')
     print('Frequency search within .gdb files assumes channels are listed as <component>_<freq>Hz')
 
