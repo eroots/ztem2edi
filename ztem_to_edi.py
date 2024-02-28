@@ -1,27 +1,12 @@
 # Converts ZTEM data from Geosoft .grd format to EDI files.
 # Note that the .grd data may be interpolated from the actual flight lines, so choose the downsampling rate accordingly.
 
-# Set your parameters here
-
-# Specify the folder containing the grid files
-# grid_path = 'E:/Work/ztem_test/Geosoft_grids/'
-gdb_path = 'E:/Work/ztem_test/Database//GL210135_Final.gdb'
-# Files should be named as <grid_tag>_<component>_<frequency>.grid
-# E.g., GL210135_XQD_030Hz.grd is the X-Quadrature component at 30 Hz
-grid_tag = 'GL210135'
-# Path to where you want the files to be output
-out_path = 'E:/Work/ztem_test/new_edis/from-gdb/'
-# UTM zone so that the lat/longs can be calculated from the grid coordinates
-utm_zone = 10
-# List of frequencies available
-freqs = [30, 45, 90, 180, 360, 720][::-1]
-# Downsampling rate (grid will be coarsened by this ratio)
-downsample_rate = 10
+# Couple of hard-coded values
 # Flat error floor to be applied in the EDI file.
 flat_error = 0.03
-
 components = ['XIP', 'YIP', 'XQD', 'YQD']
-# Don't have to change anything after this
+
+
 from collections import OrderedDict
 import numpy as np
 import geosoft.gxpy as gxpy
@@ -148,12 +133,8 @@ def to_edi(site, out_file, info=None, header=None, mtsect=None, defs=None):
 
 
 def from_gdb(data_path, out_path, downsample_rate):
-    # source_crs = 'epsg:326{:02d}'.format(utm_zone)
-    # target_crs = 'epsg:4326'
-    # projection = pyproj.Transformer.from_crs(source_crs, target_crs)
     convert = {'XIP': 'TZXR', 'YIP': 'TZYR', 'XQD': 'TZXI', 'YQD': 'TZYI'}
     data = {'TZXR': [], 'TZYR': [], 'TZXI': [], 'TZYI': [], 'Longitude': [], 'Latitude': []}
-    # orig_data = {'XIP': [], 'YIP': [], 'XQD': [], 'YQD': []}
 
     # Open the context like this so you're sure it closes properly afterwards
     with gxpy.gx.GXpy() as gxp:
@@ -248,7 +229,7 @@ def from_grd(data_path, out_path, downsample_rate):
         out_file = out_path + site + '.edi'
         to_edi(site, out_file, info=None, header=None, mtsect=None, defs=None)
 
-if __name__ == '__main__':
+def main():
     try:
         try:
             downsample_rate = sys.argv[3]
@@ -266,6 +247,9 @@ if __name__ == '__main__':
     print('\t ztem_to_edi.py <.grd or .gdb path> <output_path> <downsample_rate | Default=10>\n')
     print('Frequency search within .grd files assynes files named as <tag>_<component>_<freq>Hz.grd\n')
     print('Frequency search within .gdb files assumes channels are listed as <component>_<freq>Hz')
+
+if __name__ == '__main__':
+    main()
 
 # plt.figure()
 # for ii, comp in enumerate(data.keys()):
