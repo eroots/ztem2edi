@@ -5,7 +5,7 @@ Note that the geosoft dependency (and therefore this package) requires python ve
 
 Create a new environment:
 
-  conda create -n ztem2edi python=3.9
+  conda create -n ztem2edi python==3.9 pip git
 
   conda activate ztem2edi
 
