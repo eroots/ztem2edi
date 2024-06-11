@@ -1,6 +1,17 @@
 Installs a script to convert ZTEM data in Geosoft .grd or .gdb format to magnetotelluric EDI format.
 Call the script from within the folder containing the ZTEM data files to be converted.
 
+Install the script directly using pip and git:
+
+  pip install git+https://github.com/eroots/ztem2edi.git
+
+Or clone the repository and install using setup.py
+
+  git clone https://github.com/eroots/ztem2edi
+  python setup.py install
+
+Install should be performed in a fresh conda environment, as the dependencies require specific versions to work.
+
 Usage is:
   ztem2edi <.grd or .gdb path> <output_path> <downsample_rate | Default=10>
 
