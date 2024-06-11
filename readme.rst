@@ -1,6 +1,8 @@
 Installs a script to convert ZTEM data in Geosoft .grd or .gdb format to magnetotelluric EDI format.
 Call the script from within the folder containing the ZTEM data files to be converted.
 
+Note that the geosoft dependency (and therefore this package) requires python version 3.9.*. Ensure that your environment is using this version before trying to install ztem2edi.
+
 Install the script directly using pip and git:
 
   pip install git+https://github.com/eroots/ztem2edi.git
