@@ -19,7 +19,7 @@ Or clone the repository and install using setup.py
 
   python setup.py install
 
-Install should be performed in a fresh conda environment, as the dependencies require specific versions to work.
+Install should be performed in a fresh conda environment, as the dependencies require specific versions to work (numpy==1.20, pandas==2.0, python==3.9).
 
 Usage is:
   ztem2edi <.grd or .gdb path> <output_path> <downsample_rate | Default=10>
