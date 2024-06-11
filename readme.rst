@@ -3,6 +3,12 @@ Call the script from within the folder containing the ZTEM data files to be conv
 
 Note that the geosoft dependency (and therefore this package) requires python version 3.9.*. Ensure that your environment is using this version before trying to install ztem2edi.
 
+Create a new environment:
+
+  conda create -n ztem2edi python=3.9
+
+  conda activate ztem2edi
+
 Install the script directly using pip and git:
 
   pip install git+https://github.com/eroots/ztem2edi.git
@@ -10,6 +16,7 @@ Install the script directly using pip and git:
 Or clone the repository and install using setup.py
 
   git clone https://github.com/eroots/ztem2edi
+
   python setup.py install
 
 Install should be performed in a fresh conda environment, as the dependencies require specific versions to work.
