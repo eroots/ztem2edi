@@ -6,6 +6,8 @@
 flat_error = 0.03
 components = ['XIP', 'YIP', 'XQD', 'YQD']
 dist_tol = 0.02
+dummy_val = 0.00001
+dummy_err = 9876
 
 from collections import OrderedDict
 import numpy as np
@@ -47,7 +49,7 @@ def to_edi(site, out_file, freqs, info=None, header=None, mtsect=None, defs=None
                                 ('REFTYPE', 'CART'),
                                 ('REFLAT', '{:d}:{:d}:{:4.2f}'.format(int(lat_deg), int(lat_min), lat_sec)),
                                 ('REFLONG', '{:d}:{:d}:{:4.2f}'.format(int(long_deg), int(long_min), long_sec))])
-    default_mtsect = OrderedDict([('SECTID', '""'),
+    default_mtsect = OrderedDict([('SECTID', site['Name']),
                                   ('NFREQ', len(site['TZXR'])),
                                   ('HX', '1.01'),
                                   ('HY', '2.01'),
@@ -95,6 +97,75 @@ def to_edi(site, out_file, freqs, info=None, header=None, mtsect=None, defs=None
         for freq in freqs:
             f.write('{:>14.4E}'.format(freq))
         f.write('\n\n')
+
+        # Write some dummy impedance data here
+        # Impedance info
+        f.write('>ZROT //{}\n'.format(NP))
+        for ii in range(NP):
+            f.write('{:>14.3f}'.format(0))
+        f.write('\n\n')
+
+        f.write('>ZXXR  ROT=ZROT    //{}\n'.format(NP))
+        for ii in range(NP):
+            f.write('{:>18.7E}'.format(dummy_val))
+        f.write('\n\n')
+
+        f.write('>ZXXI  ROT=ZROT    //{}\n'.format(NP))
+        for ii in range(NP):
+            f.write('{:>18.7E}'.format(-1*dummy_val))
+        f.write('\n\n')
+
+        f.write('>ZXX.VAR  ROT=ZROT    //{}\n'.format(NP))
+        for ii in range(NP):
+            f.write('{:>18.7E}'.format(dummy_err))
+        f.write('\n\n')
+
+        f.write('>ZYYR  ROT=ZROT    //{}\n'.format(NP))
+        for ii in range(NP):
+            f.write('{:>18.7E}'.format(dummy_val))
+        f.write('\n\n')
+
+        f.write('>ZYYI  ROT=ZROT    //{}\n'.format(NP))
+        for ii in range(NP):
+            f.write('{:>18.7E}'.format(-1*dummy_val))
+        f.write('\n\n')
+
+        f.write('>ZYY.VAR  ROT=ZROT    //{}\n'.format(NP))
+        for ii in range(NP):
+            f.write('{:>18.7E}'.format(dummy_err))
+        f.write('\n\n')
+
+        f.write('>ZXYR  ROT=ZROT    //{}\n'.format(NP))
+        for ii in range(NP):
+            f.write('{:>18.7E}'.format(dummy_val))
+        f.write('\n\n')
+
+        f.write('>ZXYI  ROT=ZROT    //{}\n'.format(NP))
+        for ii in range(NP):
+            f.write('{:>18.7E}'.format(-1*dummy_val))
+        f.write('\n\n')
+
+        f.write('>ZXY.VAR  ROT=ZROT    //{}\n'.format(NP))
+        for ii in range(NP):
+            f.write('{:>18.7E}'.format(dummy_err))
+        f.write('\n\n')
+
+        f.write('>ZYXR  ROT=ZROT    //{}\n'.format(NP))
+        for ii in range(NP):
+            f.write('{:>18.7E}'.format(dummy_val))
+        f.write('\n\n')
+
+        f.write('>ZYXI  ROT=ZROT    //{}\n'.format(NP))
+        for ii in range(NP):
+            f.write('{:>18.7E}'.format(-1*dummy_val))
+        f.write('\n\n')
+
+        f.write('>ZYX.VAR  ROT=ZROT    //{}\n'.format(NP))
+        for ii in range(NP):
+            f.write('{:>18.7E}'.format(dummy_err))
+        f.write('\n\n')
+
+        #Write out the tipper info
 
         f.write('>TROT //{}\n'.format(NP))
         for ii in range(NP):
