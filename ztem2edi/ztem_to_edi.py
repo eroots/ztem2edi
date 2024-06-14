@@ -167,7 +167,7 @@ def to_edi(site, out_file, freqs, info=None, header=None, mtsect=None, defs=None
 
         #Write out the tipper info
 
-        f.write('>TROT //{}\n'.format(NP))
+        f.write('>TROT.EXP //{}\n'.format(NP))
         for ii in range(NP):
             f.write('{:>14.3f}'.format(0))
         f.write('\n\n')
