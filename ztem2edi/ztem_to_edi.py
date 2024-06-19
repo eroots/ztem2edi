@@ -208,13 +208,13 @@ def from_gdb(gdb_path, out_path, downsample_rate, skip_lines=True):
     convert = {'XIP': 'TZXR', 'YIP': 'TZYR', 'XQD': 'TZXI', 'YQD': 'TZYI'}
     data = {'TZXR': [], 'TZYR': [], 'TZXI': [], 'TZYI': [], 'Longitude': [], 'Latitude': []}
 
-    # Open the context like this so you're sure it closes properly afterwards
+    
     if downsample_rate.lower().endswith('m'):
         downsample_distance = float(downsample_rate[:-1])
     else:
         downsample_distance = 0
         skip_rate = int(downsample_rate)
-
+    # Open the context like this so you're sure it closes properly afterwards
     with gxpy.gx.GXpy() as gxp:
         gdb = gxpy.gdb.Geosoft_gdb.open(gdb_path)
         lines = list(gdb.list_lines(select=False).keys())
@@ -341,7 +341,7 @@ def main():
         try:
             downsample_rate = sys.argv[3]
         except IndexError:
-            downsample_rate = 10
+            downsample_rate = '1000m'
         if sys.argv[1].endswith('.gdb'):
             from_gdb(gdb_path=sys.argv[1], out_path=sys.argv[2], downsample_rate=str(downsample_rate))
             return
@@ -351,10 +351,18 @@ def main():
     except IndexError:
         pass
     print('Usage is:\n')
-    print('\t ztem2edi <.grd or .gdb path> <output_path> <downsample_rate | Default=10>\n')
+    print('\t ztem2edi <.gdb or .grd path> <output_path> <downsample_rate | Default=1000m>\n')
     print('Specify downsample rate as, e.g., 1000m to search for points at a 1000 meter separation')
-    print('Frequency search within .grd files assynes files named as <tag>_<component>_<freq>Hz.grd\n')
-    print('Frequency search within .gdb files assumes channels are listed as <component>_<freq>Hz')
+    print('Meter designation not available for .grd files\n')
+    print('Frequency search within .gdb files assumes channels are listed as <component>_<freq>Hz\n')
+    print('Frequency search within .grd files assumes files named as <tag>_<component>_<freq>Hz.grd\n')
+    print('/n')
+    # Not sure if the orientation is actually contained within the gdb or grd files, or if needs to be guessed
+    # from the flight path (i.e., assume the orientation is parallel to the flight path)
+    print('Note: The only data processing that occurs is a flip of the real components - ' +
+          'otherwise the input ZTEM data is assumed to be oriented with the X-component to the north.edi\n')
+    print('If possible check the output EDIs against co-located MT data.')
+
 
 if __name__ == '__main__':
     main()

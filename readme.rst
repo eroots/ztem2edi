@@ -22,12 +22,21 @@ Or clone the repository and install using setup.py
 Install should be performed in a fresh conda environment, as the dependencies require specific versions to work (numpy==1.20, pandas==2.0, python==3.9).
 
 Usage is:
-  ztem2edi <.grd or .gdb path> <output_path> <downsample_rate | Default=10>
+  ztem2edi <.gdb or .grd path> <output_path> <downsample_rate | Default=1000m>
 
   Specify downsample rate as an integer N will extract every Nth point within the grid as an MT station.
 
   Alternatively, specify in meters, e.g., 1000m to search for points at a 1000 meter separation
 
-  Frequency search within .grd files assumes files named as <tag>_<component>_<freq>Hz.grd
+  Meter specification for the downsample rate is not available for .grd files - gdb files preferred as they contain original flight line information.
 
   Frequency search within .gdb files assumes channels are listed as <component>_<freq>Hz
+
+  Frequency search within .grd files assumes files named as <tag>_<component>_<freq>Hz.grd
+
+Data is converted as follows:
+
+  Tzx = (-1 * XIP) + 1j*XQD
+  Tzy = (-1 * YIP) + 1j*YQD
+
+X and Y components are swapped, real and imaginary portions of the vertical magnetic transfer function corresponds to the in-phase and quadrature components of the ZTEM response, respectively.
