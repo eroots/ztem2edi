@@ -24,6 +24,34 @@ def dd2dms(dd):
     deg, mnt = divmod(mnt, 60)
     return mult * deg, mnt, sec
 
+def rotate_data(data, theta):
+    theta_rad = np.deg2rad(theta)
+    # c, s = np.cos(rad), np.sin(rad)
+    # R = np.array(((c, -s), (s, c)))
+    for ii in range(data['TZXR'].shape[0]):
+        for ifreq in range(len(data['TZXR'][ii, :])):
+            # dR = np.array((data['TZXR'][ii, ifreq], data['TZYR'][ii, ifreq]))
+            # dI = np.array((data['TZXI'][ii, ifreq], data['TZYI'][ii, ifreq]))
+            # dR_rot = R.dot(dR)
+            # dI_rot = R.dot(dI)
+            # data['TZXR'][ii, ifreq] = dR_rot[0]
+            # data['TZYR'][ii, ifreq] = dR_rot[1]
+            # data['TZXI'][ii, ifreq] = dI_rot[0]
+            # data['TZYI'][ii, ifreq] = dI_rot[1]
+
+            dXR = (data['TZXR'][ii, ifreq] * np.cos(theta_rad) -
+                   data['TZYR'][ii, ifreq] * np.sin(theta_rad))
+            dYR = (data['TZXR'][ii, ifreq] * np.sin(theta_rad) +
+                   data['TZYR'][ii, ifreq] * np.cos(theta_rad))
+            dXI = (data['TZXI'][ii, ifreq] * np.cos(theta_rad) -
+                   data['TZYI'][ii, ifreq] * np.sin(theta_rad))
+            dYI = (data['TZXI'][ii, ifreq] * np.sin(theta_rad) +
+                   data['TZYI'][ii, ifreq] * np.cos(theta_rad))
+            data['TZXR'][ii, ifreq] = dXR
+            data['TZYR'][ii, ifreq] = dYR
+            data['TZXI'][ii, ifreq] = dXI
+            data['TZYI'][ii, ifreq] = dYI
+    return data
 
 def to_edi(site, out_file, freqs, info=None, header=None, mtsect=None, defs=None):
     NP = len(freqs)
@@ -204,7 +232,7 @@ def to_edi(site, out_file, freqs, info=None, header=None, mtsect=None, defs=None
         f.write('>END')
 
 
-def from_gdb(gdb_path, out_path, downsample_rate, skip_lines=True):
+def from_gdb(gdb_path, out_path, downsample_rate, skip_lines=True, rotation=0):
     convert = {'XIP': 'TZXR', 'YIP': 'TZYR', 'XQD': 'TZXI', 'YQD': 'TZYI'}
     data = {'TZXR': [], 'TZYR': [], 'TZXI': [], 'TZYI': [], 'Longitude': [], 'Latitude': []}
 
@@ -251,27 +279,33 @@ def from_gdb(gdb_path, out_path, downsample_rate, skip_lines=True):
                 data['Latitude'] = gdb.read_line(line, channels='Latitude')[0][idx]
                 data['Longitude'] = gdb.read_line(line, channels='Longitude')[0][idx]
             except gxpy.gdb.GdbException:
-                data['Latitude'] = gdb.read_line(line, channels='Lat')[0][idx]
-                data['Longitude'] = gdb.read_line(line, channels='Long')[0][idx]
+                try:
+                    data['Latitude'] = gdb.read_line(line, channels='Lat')[0][idx]
+                    data['Longitude'] = gdb.read_line(line, channels='Long')[0][idx]
+                except gxpy.gdb.GdbException:
+                    data['Latitude'] = gdb.read_line(line, channels='Lat')[0][idx]
+                    data['Longitude'] = gdb.read_line(line, channels='Lon')[0][idx]
             for key in data.keys():
                 if key not in ('Latitude', 'Longitude'):
                     data.update({key: np.zeros((len(data['Latitude']), len(freqs)))})
             for ii, freq in enumerate(freqs):
                 # For some reason it seems to require flipping the real parts
                 # print('XIP_{:03d}Hz'.format(freq))
-                data['TZYR'][:, ii] = -1 * np.squeeze(gdb.read_line(line, channels='XIP_{:03d}Hz'.format(freq))[0][idx])
-                data['TZXR'][:, ii] = -1 *  np.squeeze(gdb.read_line(line, channels='YIP_{:03d}Hz'.format(freq))[0][idx])
-                data['TZYI'][:, ii] = np.squeeze(gdb.read_line(line, channels='XQD_{:03d}Hz'.format(freq))[0][idx])
-                data['TZXI'][:, ii] = np.squeeze(gdb.read_line(line, channels='YQD_{:03d}Hz'.format(freq))[0][idx])
+                data['TZXR'][:, ii] = np.squeeze(gdb.read_line(line, channels='XIP_{:03d}Hz'.format(freq))[0][idx])
+                data['TZYR'][:, ii] = np.squeeze(gdb.read_line(line, channels='YIP_{:03d}Hz'.format(freq))[0][idx])
+                data['TZXI'][:, ii] = np.squeeze(gdb.read_line(line, channels='XQD_{:03d}Hz'.format(freq))[0][idx])
+                data['TZYI'][:, ii] = np.squeeze(gdb.read_line(line, channels='YQD_{:03d}Hz'.format(freq))[0][idx])
+            if rotation:
+                data = rotate_data(data, theta=rotation)
             
             for ii in range(len(data['TZXR'][:,0])):
                 site_name = '{}_{:03d}'.format(line, ii)
                 out_file = out_path + site_name + '.edi'
                 site = {'Name': site_name,
-                        'TZXR': data['TZXR'][ii, :],
-                        'TZYR': data['TZYR'][ii, :],
-                        'TZXI': data['TZXI'][ii, :],
-                        'TZYI': data['TZYI'][ii, :],
+                        'TZXR': -1*data['TZYR'][ii, :],
+                        'TZYR': -1*data['TZXR'][ii, :],
+                        'TZXI': data['TZYI'][ii, :],
+                        'TZYI': data['TZXI'][ii, :],
                         'Latitude' : data['Latitude'][ii][0],
                         'Longitude' : data['Longitude'][ii][0]}
                 out_file = os.path.join(out_path, site_name + '.edi')
@@ -340,28 +374,32 @@ def main():
     try:
         try:
             downsample_rate = sys.argv[3]
+            rotation = float(sys.argv[4])
         except IndexError:
             downsample_rate = '1000m'
+            rotation = 0
         if sys.argv[1].endswith('.gdb'):
-            from_gdb(gdb_path=sys.argv[1], out_path=sys.argv[2], downsample_rate=str(downsample_rate))
+            from_gdb(gdb_path=sys.argv[1], out_path=sys.argv[2], downsample_rate=str(downsample_rate), rotation=rotation)
             return
         elif sys.argv[1].endswith('.grd'):
-            from_grd(gdb_path=sys.argv[1], out_path=sys.argv[2], downsample_rate=str(downsample_rate))
-            return
+            # from_grd(gdb_path=sys.argv[1], out_path=sys.argv[2], downsample_rate=str(downsample_rate))
+            # return
+            print('Conversion from .grd files is depreciated (for now). Please use a .gdb file instead\n')
     except IndexError:
-        pass
+        print(IndexError.msg)
     print('Usage is:\n')
-    print('\t ztem2edi <.gdb or .grd path> <output_path> <downsample_rate | Default=1000m>\n')
-    print('Specify downsample rate as, e.g., 1000m to search for points at a 1000 meter separation')
+    print('\t ztem2edi <path/to/.gdb> <output_path> <downsample_rate | Default=1000m> <rotation_angle | Default=0>\n')
+    print('Specify downsample rate as, e.g., 1000m to search for points at a 1000 meter separation\n')
+    print('If the "m" is omitted, every nth point will be taken instead\n')
+    print('Be sure to check if any rotation is necessary (i.e., are X and Y oriented towards E-W / N-S, or towards flight directions?)')
     print('Meter designation not available for .grd files\n')
     print('Frequency search within .gdb files assumes channels are listed as <component>_<freq>Hz\n')
-    print('Frequency search within .grd files assumes files named as <tag>_<component>_<freq>Hz.grd\n')
-    print('/n')
+    # print('Frequency search within .grd files assumes files named as <tag>_<component>_<freq>Hz.grd\n')
     # Not sure if the orientation is actually contained within the gdb or grd files, or if needs to be guessed
     # from the flight path (i.e., assume the orientation is parallel to the flight path)
-    print('Note: The only data processing that occurs is a flip of the real components - ' +
-          'otherwise the input ZTEM data is assumed to be oriented with the X-component to the north.edi\n')
-    print('If possible check the output EDIs against co-located MT data.')
+    # print('Note: The only data processing that occurs is a flip of the real components - ' +
+          # 'otherwise the input ZTEM data is assumed to be oriented with the X-component to the north.edi\n')
+    print('If possible check the output EDIs against co-located MT data and/or power lines.')
 
 
 if __name__ == '__main__':
