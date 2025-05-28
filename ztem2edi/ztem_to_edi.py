@@ -232,10 +232,15 @@ def to_edi(site, out_file, freqs, info=None, header=None, mtsect=None, defs=None
         f.write('>END')
 
 
-def from_gdb(gdb_path, out_path, downsample_rate, skip_lines=True, rotation=0):
+def from_gdb(gdb_path, out_path, downsample_rate, skip_lines=True, rotation=0, write_edis=True):
     convert = {'XIP': 'TZXR', 'YIP': 'TZYR', 'XQD': 'TZXI', 'YQD': 'TZYI'}
     data = {'TZXR': [], 'TZYR': [], 'TZXI': [], 'TZYI': [], 'Longitude': [], 'Latitude': []}
 
+    if rotation == '-i':
+        rotation = 1
+        use_line_angle = True
+    else:
+        use_line_angle = False
     
     if downsample_rate.lower().endswith('m'):
         downsample_distance = float(downsample_rate[:-1])
@@ -251,6 +256,7 @@ def from_gdb(gdb_path, out_path, downsample_rate, skip_lines=True, rotation=0):
         freqs = sorted(set([int(x[4:7]) for x in gdb.list_channels() if (x[:3].upper() in components and x.lower().endswith('hz'))]))
         print('Frequency set is: {}'.format(freqs))
         line_skipped = False
+        flight_angle = []
         for il, line in enumerate(lines):
             # Do these one at a time just in case they get returned out of order
             if il > 0 and not line_skipped:
@@ -259,6 +265,20 @@ def from_gdb(gdb_path, out_path, downsample_rate, skip_lines=True, rotation=0):
                 # Assume the sample distance is constant
                 X = gdb.read_line(line, channels='X')[0]
                 Y = gdb.read_line(line, channels='Y')[0]
+                # flight_angle.append(np.rad2deg(np.arctan((Y[-1] - Y[0])/(X[-1] - X[0]))))
+                angle = np.rad2deg(np.arctan((Y[-1] - Y[0])/(X[-1] - X[0])))
+                ii = 0
+                while True:
+                    if np.isnan(angle):
+                        ii += 1
+                        angle = np.rad2deg(np.arctan((Y[-1-ii] - Y[0+ii])/(X[-1-ii] - X[0+ii])))
+                    else:
+                        break
+                flight_angle.append(angle)
+                if np.isnan(flight_angle[-1]):
+                    print('{}, X: ({}, {}), Y: ({}, {}'.format(line, X[0], X[-1], Y[0], Y[-1]))
+                if not write_edis:
+                    continue
                 if skip_lines and il > 0:
                     line_dist = np.min((np.sqrt((x1 - X[0])**2 + (y1 - Y[0])**2),
                                         np.sqrt((x1 - X[-1])**2 + (y1 - Y[-1])**2)))
@@ -291,12 +311,25 @@ def from_gdb(gdb_path, out_path, downsample_rate, skip_lines=True, rotation=0):
             for ii, freq in enumerate(freqs):
                 # For some reason it seems to require flipping the real parts
                 # print('XIP_{:03d}Hz'.format(freq))
-                data['TZXR'][:, ii] = np.squeeze(gdb.read_line(line, channels='XIP_{:03d}Hz'.format(freq))[0][idx])
-                data['TZYR'][:, ii] = np.squeeze(gdb.read_line(line, channels='YIP_{:03d}Hz'.format(freq))[0][idx])
-                data['TZXI'][:, ii] = np.squeeze(gdb.read_line(line, channels='XQD_{:03d}Hz'.format(freq))[0][idx])
-                data['TZYI'][:, ii] = np.squeeze(gdb.read_line(line, channels='YQD_{:03d}Hz'.format(freq))[0][idx])
+                try:
+                    data['TZXR'][:, ii] = np.squeeze(gdb.read_line(line, channels='XIP_{:03d}Hz'.format(freq))[0][idx])
+                    data['TZYR'][:, ii] = np.squeeze(gdb.read_line(line, channels='YIP_{:03d}Hz'.format(freq))[0][idx])
+                    data['TZXI'][:, ii] = np.squeeze(gdb.read_line(line, channels='XQD_{:03d}Hz'.format(freq))[0][idx])
+                    data['TZYI'][:, ii] = np.squeeze(gdb.read_line(line, channels='YQD_{:03d}Hz'.format(freq))[0][idx])
+                except IndexError:
+                    print('IndexError at line {}'.format(line))
+                    print('Infilling frequency {} with dummies'.format(freq))
+                    data['TZXR'][:, ii] = 1e-10
+                    data['TZYR'][:, ii] = 1e-10
+                    data['TZXI'][:, ii] = 1e-10
+                    data['TZYI'][:, ii] = 1e-10
+            
             if rotation:
-                data = rotate_data(data, theta=rotation)
+                if use_line_angle:
+                    rotation_angle = flight_angle[-1]
+                else:
+                    rotation_angle = rotation
+                data = rotate_data(data, theta=rotation_angle)
             
             for ii in range(len(data['TZXR'][:,0])):
                 site_name = '{}_{:03d}'.format(line, ii)
@@ -312,7 +345,9 @@ def from_gdb(gdb_path, out_path, downsample_rate, skip_lines=True, rotation=0):
                 if not os.path.exists(out_path):
                     os.mkdir(out_path)
                 to_edi(site, out_file, freqs=freqs, info=None, header=None, mtsect=None, defs=None)
-
+        print('Flight angle min: {:>4.2f}, max: {:>4.2f}, mean: {:>4.2f}'.format(np.nanmin(flight_angle),
+                                                                                 np.nanmax(flight_angle),
+                                                                                 np.nanmean(flight_angle)))
 
 def from_grd(data_path, out_path, downsample_rate):
     files = os.listdir(data_path)
@@ -374,12 +409,24 @@ def main():
     try:
         try:
             downsample_rate = sys.argv[3]
-            rotation = float(sys.argv[4])
+            try:
+                rotation = float(sys.argv[4])
+                write_edis = True
+            except ValueError:
+                if sys.argv[4] == '-i':
+                    rotation = '-i'
+                    write_edis = True
+                else:                    
+                    rotation = 0
+                    write_edis = False
+                    print('Test running (no rotation angle given)')
         except IndexError:
             downsample_rate = '1000m'
             rotation = 0
         if sys.argv[1].endswith('.gdb'):
-            from_gdb(gdb_path=sys.argv[1], out_path=sys.argv[2], downsample_rate=str(downsample_rate), rotation=rotation)
+            from_gdb(gdb_path=sys.argv[1], out_path=sys.argv[2],
+                     downsample_rate=str(downsample_rate),
+                     rotation=rotation, write_edis=write_edis)
             return
         elif sys.argv[1].endswith('.grd'):
             # from_grd(gdb_path=sys.argv[1], out_path=sys.argv[2], downsample_rate=str(downsample_rate))
@@ -391,6 +438,7 @@ def main():
     print('\t ztem2edi <path/to/.gdb> <output_path> <downsample_rate | Default=1000m> <rotation_angle | Default=0>\n')
     print('Specify downsample rate as, e.g., 1000m to search for points at a 1000 meter separation\n')
     print('If the "m" is omitted, every nth point will be taken instead\n')
+    print('Enter a string (e.g., "test") in place of the rotation angle to check the flight line orientation without writing the EDIs\n')
     print('Be sure to check if any rotation is necessary (i.e., are X and Y oriented towards E-W / N-S, or towards flight directions?)')
     print('Meter designation not available for .grd files\n')
     print('Frequency search within .gdb files assumes channels are listed as <component>_<freq>Hz\n')
